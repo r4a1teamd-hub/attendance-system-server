@@ -1,0 +1,120 @@
+import React, { useEffect, useState } from 'react';
+import { View, Text, FlatList, StyleSheet, Button, ActivityIndicator } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
+import api from '../api';
+
+export default function DashboardScreen({ navigation }) {
+    const [attendances, setAttendances] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        fetchAttendance();
+    }, []);
+
+    const fetchAttendance = async () => {
+        try {
+            const response = await api.get('/attendance/me');
+            setAttendances(response.data);
+            setLoading(false);
+        } catch (error) {
+            console.error(error);
+            setLoading(false);
+        }
+    };
+
+    const handleLogout = async () => {
+        await SecureStore.deleteItemAsync('token');
+        navigation.replace('Login');
+    };
+
+    const getStatusText = (status) => {
+        switch (status) {
+            case 'present': return '出席';
+            case 'absent': return '欠席';
+            case 'late': return '遅刻';
+            default: return status.toUpperCase();
+        }
+    };
+
+    const renderItem = ({ item }) => (
+        <View style={styles.item}>
+            <Text style={styles.date}>{new Date(item.timestamp).toLocaleString('ja-JP')}</Text>
+            <Text style={[styles.status, styles[item.status]]}>{getStatusText(item.status)}</Text>
+        </View>
+    );
+
+    if (loading) {
+        return (
+            <View style={styles.center}>
+                <ActivityIndicator size="large" />
+            </View>
+        );
+    }
+
+    return (
+        <View style={styles.container}>
+            <View style={styles.header}>
+                <Text style={styles.title}>出席履歴</Text>
+                <Button title="ログアウト" onPress={handleLogout} />
+            </View>
+            <FlatList
+                data={attendances}
+                renderItem={renderItem}
+                keyExtractor={(item) => item.id.toString()}
+                ListEmptyComponent={<Text style={styles.empty}>出席記録がありません。</Text>}
+            />
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({
+    container: {
+        flex: 1,
+        padding: 20,
+        backgroundColor: '#f5f5f5',
+    },
+    center: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    header: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 20,
+        marginTop: 40,
+    },
+    title: {
+        fontSize: 24,
+        fontWeight: 'bold',
+    },
+    item: {
+        backgroundColor: '#fff',
+        padding: 15,
+        borderRadius: 8,
+        marginBottom: 10,
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    date: {
+        fontSize: 16,
+    },
+    status: {
+        fontWeight: 'bold',
+    },
+    present: { color: 'green' },
+    absent: { color: 'red' },
+    late: { color: 'orange' },
+    empty: {
+        textAlign: 'center',
+        marginTop: 20,
+        color: '#666',
+    },
+});

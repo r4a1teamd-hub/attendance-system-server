@@ -10,13 +10,16 @@
 		"ghcr.io/itsmechlark/features/postgresql:1": {}
 	},
 
+	// コンテナのデフォルトユーザーを vscode に設定
+	"remoteUser": "vscode",
+
 	// Use 'forwardPorts' to make a list of ports inside the container available locally.
 	// Flaskアプリのために5000番ポートなどをフォワードする
 	"forwardPorts": [5000],
 
 	// Use 'postCreateCommand' to run commands after the container is created.
-	// コンテナ作成時に自動でパッケージをインストールする
-	"postCreateCommand": "pip3 install --user -r requirements.txt",
+	// vscodeユーザーでパッケージをインストールする
+	"postCreateCommand": "sudo -u vscode pip3 install --user -r requirements.txt",
 
 	// Configure tool-specific properties.
 	"customizations": {
