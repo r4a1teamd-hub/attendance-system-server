@@ -18,12 +18,32 @@
     left: 0;
     top: 0;
     z-index: 10;
+    transition: width 0.3s ease;
     /* サイドバーを上に */
+}
+
+.sidebar.collapsed {
+    width: 70px;
 }
 
 .sidebar-header {
     padding: 1.5rem;
     border-bottom: 1px solid #2d3748;
+    height: 70px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.header-content {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sidebar.collapsed .header-content {
+    justify-content: center;
 }
 
 .sidebar-header h2 {
@@ -31,6 +51,26 @@
     font-size: 1.2rem;
     font-weight: 700;
     color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.toggle-btn {
+    background: none;
+    border: none;
+    color: #a0aec0;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.toggle-btn:hover {
+    color: white;
+    background-color: #2d3748;
 }
 
 .sidebar-nav {
@@ -39,6 +79,12 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+    overflow-x: hidden;
+}
+
+.sidebar.collapsed .sidebar-nav {
+    padding: 1.5rem 0.5rem;
+    align-items: center;
 }
 
 .sidebar-nav a {
@@ -50,6 +96,13 @@
     text-decoration: none;
     border-radius: 0.5rem;
     transition: all 0.2s;
+    width: 100%;
+    white-space: nowrap;
+}
+
+.sidebar.collapsed .sidebar-nav a {
+    justify-content: center;
+    padding: 0.75rem;
 }
 
 .sidebar-nav a:hover,
@@ -61,6 +114,12 @@
 .sidebar-footer {
     padding: 1.5rem;
     border-top: 1px solid #2d3748;
+}
+
+.sidebar.collapsed .sidebar-footer {
+    padding: 1.5rem 0.5rem;
+    display: flex;
+    justify-content: center;
 }
 
 .logout-btn {
@@ -76,6 +135,12 @@
     border-radius: 0.5rem;
     cursor: pointer;
     transition: background-color 0.2s;
+    white-space: nowrap;
+}
+
+.sidebar.collapsed .logout-btn {
+    padding: 0.75rem;
+    width: auto;
 }
 
 .logout-btn:hover {
@@ -91,6 +156,11 @@
     background-color: #ffffff;
     /* メインエリアも白 */
     min-height: 100vh;
+    transition: margin-left 0.3s ease;
+}
+
+.main-content.expanded {
+    margin-left: 70px;
 }
 
 .top-header {
