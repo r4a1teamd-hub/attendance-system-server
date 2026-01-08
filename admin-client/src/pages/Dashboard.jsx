@@ -1,56 +1,31 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api';
-import { AlertTriangle, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { AlertTriangle, CheckCircle, XCircle, Clock, Users, UserCheck, UserX } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import './Dashboard.css';
 
 function Dashboard() {
-    const [attendanceData, setAttendanceData] = useState([]);
-    const [summaryStats, setSummaryStats] = useState({ total: 0, present: 0, absent: 0, late: 0 });
+    const [stats, setStats] = useState({
+        date: '',
+        total_students: 0,
+        present: 0,
+        late: 0,
+        absent: 0
+    });
     const [loading, setLoading] = useState(true);
     const navigate = useNavigate();
 
     useEffect(() => {
-        fetchData();
+        fetchStats();
     }, []);
 
-    const fetchData = async () => {
+    const fetchStats = async () => {
         try {
-            const [usersResponse, attendanceResponse] = await Promise.all([
-                api.get('/admin/users'),
-                api.get('/admin/attendance')
-            ]);
-
-            const students = usersResponse.data.filter(user => user.role !== 1); // Exclude admins/teachers if needed, assuming role 1 is admin
-            const attendances = attendanceResponse.data;
-
-            // Merge data
-            const mergedData = students.map(student => {
-                const record = attendances.find(a => a.student_id === student.student_id);
-                return {
-                    ...student,
-                    attendance_id: record ? record.id : null,
-                    status: record ? record.status : 'unrecorded',
-                    timestamp: record ? record.timestamp : null,
-                    recorded_by: record ? record.recorded_by : '-'
-                };
-            });
-
-            setAttendanceData(mergedData);
-
-            // Calculate summary stats based on merged data or raw attendance?
-            // Usually summary is about "today's records".
-            // Total students is the number of students in the class.
-            setSummaryStats({
-                total: students.length,
-                present: attendances.filter(a => a.status === 'present').length,
-                absent: attendances.filter(a => a.status === 'absent').length,
-                late: attendances.filter(a => a.status === 'late').length
-            });
-
+            const response = await api.get('/admin/daily_stats');
+            setStats(response.data);
             setLoading(false);
         } catch (error) {
-            console.error('Error fetching data:', error);
+            console.error('Error fetching stats:', error);
             if (error.response && error.response.status === 401) {
                 navigate('/login');
             }
@@ -58,104 +33,40 @@ function Dashboard() {
         }
     };
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        navigate('/login');
-    };
-
-    const sendWarning = async (userId) => {
-        try {
-            await api.post('/admin/send_warning', { user_id: userId });
-            alert('警告メールを送信しました！');
-        } catch (error) {
-            alert('警告の送信に失敗しました');
-        }
-    };
-
-    const getStatusIcon = (status) => {
-        switch (status) {
-            case 'present': return <CheckCircle className="icon success" />;
-            case 'absent': return <XCircle className="icon error" />;
-            case 'late': return <Clock className="icon warning" />;
-            case 'unrecorded': return <span className="icon-placeholder">-</span>;
-            default: return null;
-        }
-    };
-
-    const getStatusText = (status) => {
-        switch (status) {
-            case 'present': return '出席';
-            case 'absent': return '欠席';
-            case 'late': return '遅刻';
-            case 'unrecorded': return '未記録';
-            default: return status;
-        }
-    };
-
     if (loading) return <div className="loading">読み込み中...</div>;
+
+    // Calculate percentages based on total students
+    const total = stats.total_students || 1; // Avoid division by zero
+    const presentRate = Math.round((stats.present / total) * 100);
 
     return (
         <>
             <div className="summary-cards">
-                <div className="card">
-                    <h3>登録学生数</h3>
-                    <p className="count">{summaryStats.total}</p>
+                <div className="card total">
+                    <h3><Users size={20} /> 学生総数</h3>
+                    <p className="count">{stats.total_students}名</p>
+                    <p className="label">登録済み学生</p>
                 </div>
                 <div className="card present">
-                    <h3>出席</h3>
-                    <p className="count">{summaryStats.present}</p>
-                </div>
-                <div className="card absent">
-                    <h3>欠席</h3>
-                    <p className="count">{summaryStats.absent}</p>
+                    <h3><UserCheck size={20} /> 本日の出席</h3>
+                    <p className="count">{stats.present}名</p>
+                    <p className="label">出席率: {presentRate}%</p>
                 </div>
                 <div className="card late">
-                    <h3>遅刻</h3>
-                    <p className="count">{summaryStats.late}</p>
+                    <h3><Clock size={20} /> 本日の遅刻</h3>
+                    <p className="count">{stats.late}名</p>
+                    <p className="label">遅刻者数</p>
+                </div>
+                <div className="card absent">
+                    <h3><UserX size={20} /> 本日の欠席</h3>
+                    <p className="count">{stats.absent}名</p>
+                    <p className="label">欠席者数</p>
                 </div>
             </div>
 
             <div className="content-section">
-                <h2>本日の出席簿</h2>
-                <div className="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>学籍番号</th>
-                                <th>氏名</th>
-                                <th>ステータス</th>
-                                <th>記録日時</th>
-                                <th>記録者</th>
-                                <th>アクション</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {attendanceData.map((student) => (
-                                <tr key={student.id}>
-                                    <td>{student.student_id}</td>
-                                    <td>{student.username}</td>
-                                    <td>
-                                        <span className={`status-badge status-${student.status}`}>
-                                            {getStatusIcon(student.status)} {getStatusText(student.status)}
-                                        </span>
-                                    </td>
-                                    <td>{student.timestamp ? new Date(student.timestamp).toLocaleString('ja-JP') : '-'}</td>
-                                    <td>{student.recorded_by}</td>
-                                    <td>
-                                        {student.status === 'absent' && (
-                                            <button
-                                                onClick={() => sendWarning(student.id)}
-                                                className="warning-btn"
-                                            >
-                                                <AlertTriangle size={16} /> 警告
-                                            </button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
+                <h2>本日の出欠状況 ({stats.date})</h2>
+                <p>※ 詳細な月次データはサイドメニューの「出席簿」から確認してください。</p>
             </div>
         </>
     );

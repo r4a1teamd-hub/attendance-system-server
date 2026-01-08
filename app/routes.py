@@ -259,3 +259,102 @@ def get_stats():
         })
     
     return jsonify(stats)
+
+@bp.route('/api/admin/daily_stats', methods=['GET'])
+@token_required
+def get_daily_stats():
+    user = g.current_user
+    if user.role != 1:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    today = datetime.now().date()
+    start_of_day = datetime.combine(today, datetime.min.time())
+    end_of_day = datetime.combine(today, datetime.max.time())
+
+    attendances = Attendance.query.filter(
+        Attendance.timestamp >= start_of_day,
+        Attendance.timestamp <= end_of_day
+    ).all()
+
+    present = sum(1 for a in attendances if a.status == 'present')
+    late = sum(1 for a in attendances if a.status == 'late')
+    absent = sum(1 for a in attendances if a.status == 'absent')
+    
+    # 登録されている全学生数を取得（分母用）
+    total_students = User.query.filter_by(role=0).count()
+    
+    # まだ記録がない学生は「未記録」扱いだが、ここでは単純なカウントを返す
+    # 必要であれば「未記録」の数も計算可能: total_students - (present + late + absent)
+
+    return jsonify({
+        'date': today.isoformat(),
+        'total_students': total_students,
+        'present': present,
+        'late': late,
+        'absent': absent
+    })
+
+@bp.route('/api/admin/monthly_attendance', methods=['GET'])
+@token_required
+def get_monthly_attendance():
+    user = g.current_user
+    if user.role != 1:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    year = request.args.get('year', type=int, default=datetime.now().year)
+    month = request.args.get('month', type=int, default=datetime.now().month)
+
+    # 月の初日と末日を計算
+    start_date = datetime(year, month, 1)
+    if month == 12:
+        end_date = datetime(year + 1, 1, 1) - timedelta(seconds=1)
+    else:
+        end_date = datetime(year, month + 1, 1) - timedelta(seconds=1)
+
+    students = User.query.filter_by(role=0).all()
+    results = []
+
+    for student in students:
+        attendances = Attendance.query.filter(
+            Attendance.user_id == student.id,
+            Attendance.timestamp >= start_date,
+            Attendance.timestamp <= end_date
+        ).all()
+
+        # 日付ごとのステータスマップを作成 (例: {1: 'present', 5: 'late'})
+        daily_status = {}
+        present_count = 0
+        late_count = 0
+        absent_count = 0
+
+        for att in attendances:
+            day = att.timestamp.day
+            # 同日に複数記録がある場合は最新を採用するロジックなどが考えられるが、
+            # ここではシンプルに上書き（または最初の1件）とする。
+            # 実際には timestamp順で取得してループすれば最新が残る等の制御が可能
+            daily_status[day] = att.status
+            
+            if att.status == 'present':
+                present_count += 1
+            elif att.status == 'late':
+                late_count += 1
+            elif att.status == 'absent':
+                absent_count += 1
+
+        results.append({
+            'id': student.id,
+            'student_id': student.student_id,
+            'username': student.username,
+            'summary': {
+                'present': present_count,
+                'late': late_count,
+                'absent': absent_count
+            },
+            'daily_status': daily_status
+        })
+
+    return jsonify({
+        'year': year,
+        'month': month,
+        'students': results
+    })

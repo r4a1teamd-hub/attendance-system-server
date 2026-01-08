@@ -15,7 +15,9 @@ function Students() {
     const fetchStudents = async () => {
         try {
             const response = await api.get('/admin/users');
-            setStudents(response.data);
+            // Filter out teachers (role 1)
+            const studentOnly = response.data.filter(user => user.role !== 1);
+            setStudents(studentOnly);
             setLoading(false);
         } catch (error) {
             console.error('Error fetching students:', error);
@@ -39,7 +41,6 @@ function Students() {
                             <th>学籍番号</th>
                             <th>氏名</th>
                             <th>メールアドレス</th>
-                            <th>権限</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -49,11 +50,6 @@ function Students() {
                                 <td>{student.student_id}</td>
                                 <td>{student.username}</td>
                                 <td>{student.email}</td>
-                                <td>
-                                    <span className={`status-badge ${student.role === 1 ? 'status-present' : 'status-late'}`}>
-                                        {student.role === 1 ? '教員' : '学生'}
-                                    </span>
-                                </td>
                             </tr>
                         ))}
                     </tbody>

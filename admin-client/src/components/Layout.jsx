@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
-import { LogOut, CheckCircle, User, Settings, AlertTriangle } from 'lucide-react';
+import { LogOut, CheckCircle, User, Settings, AlertTriangle, Calendar } from 'lucide-react';
 import '../pages/Dashboard.css'; // Reuse dashboard styles for layout
 
 function Layout() {
@@ -22,6 +22,9 @@ function Layout() {
                     <Link to="/dashboard" className={location.pathname === '/dashboard' ? 'active' : ''}>
                         <CheckCircle size={20} /> ダッシュボード
                     </Link>
+                    <Link to="/attendance-register" className={location.pathname === '/attendance-register' ? 'active' : ''}>
+                        <Calendar size={20} /> 出席簿
+                    </Link>
                     <Link to="/students" className={location.pathname === '/students' ? 'active' : ''}>
                         <User size={20} /> 学生一覧
                     </Link>
@@ -41,7 +44,8 @@ function Layout() {
                 <header className="top-header">
                     <h1>{location.pathname === '/dashboard' ? 'ダッシュボード' :
                         location.pathname === '/students' ? '学生一覧' :
-                            location.pathname === '/reports' ? 'レポート' : '管理画面'}</h1>
+                            location.pathname === '/reports' ? 'レポート' :
+                                location.pathname === '/attendance-register' ? '出席簿' : '管理画面'}</h1>
                     <div className="user-info">
                         <span>管理者: <strong>Admin Teacher</strong></span>
                     </div>

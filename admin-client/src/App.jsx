@@ -4,6 +4,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Students from './pages/Students';
 import Reports from './pages/Reports';
+import AttendanceRegister from './pages/AttendanceRegister';
 import Layout from './components/Layout';
 import './App.css';
 
@@ -16,6 +17,7 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/students" element={<Students />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/attendance-register" element={<AttendanceRegister />} />
         </Route>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
       </Routes>
