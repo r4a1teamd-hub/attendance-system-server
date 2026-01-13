@@ -17,3 +17,6 @@ class Config:
     MAIL_USERNAME = os.environ.get('MAIL_USERNAME')
     MAIL_PASSWORD = os.environ.get('MAIL_PASSWORD')
     MAIL_DEFAULT_SENDER = os.environ.get('MAIL_USERNAME')
+    
+    # Raspberry Pi API Key
+    RASPBERRY_PI_API_KEY = os.environ.get('RASPBERRY_PI_API_KEY') or 'default-insecure-api-key'

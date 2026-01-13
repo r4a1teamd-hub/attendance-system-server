@@ -114,6 +114,11 @@ def get_current_user():
 
 @bp.route('/api/record_attendance', methods=['POST'])
 def record_attendance():
+    # API Key check
+    api_key = request.headers.get('X-API-KEY')
+    if api_key != current_app.config['RASPBERRY_PI_API_KEY']:
+        return jsonify({'error': 'Unauthorized'}), 401
+
     # RasPiからの送信データ: { student_id, token, status, timestamp(optional) }
     
     data = request.get_json()

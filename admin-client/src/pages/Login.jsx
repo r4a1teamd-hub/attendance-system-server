@@ -21,26 +21,68 @@ function Login() {
     };
 
     return (
-        <div className="login-container">
-            <form onSubmit={handleLogin} className="login-form">
-                <h2>教員ログイン</h2>
-                {error && <p className="error">{error}</p>}
-                <input
-                    type="text"
-                    placeholder="教員ID (学籍番号)"
-                    value={studentId}
-                    onChange={(e) => setStudentId(e.target.value)}
-                />
-                <input
-                    type="password"
-                    placeholder="パスワード"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                />
-                <button type="submit">ログイン</button>
-            </form>
+        <div className="login-page">
+            <div className="login-intro">
+                <div className="intro-content">
+                    <h1>出席管理システム</h1>
+                    <p className="subtitle">Attendance Management System</p>
+                    <div className="features">
+                        <div className="feature-item">
+                            <span className="icon">✓</span>
+                            <span>リアルタイムな出席状況の把握</span>
+                        </div>
+                        <div className="feature-item">
+                            <span className="icon">✓</span>
+                            <span>月次レポートの自動集計</span>
+                        </div>
+                        <div className="feature-item">
+                            <span className="icon">✓</span>
+                            <span>学生への自動警告通知機能</span>
+                        </div>
+                    </div>
+                </div>
+                <div className="intro-footer">
+                    <p>&copy; 2026 R4A1 Team D. All rights reserved.</p>
+                </div>
+            </div>
+
+            <div className="login-form-section">
+                <div className="login-wrapper">
+                    <form onSubmit={handleLogin} className="login-form">
+                        <div className="form-header">
+                            <h2>管理者ログイン</h2>
+                            <p>アカウント情報を入力して続行してください</p>
+                        </div>
+
+                        {error && <p className="error">{error}</p>}
+
+                        <div className="form-group">
+                            <label>教員ID</label>
+                            <input
+                                type="text"
+                                placeholder="例: 12345678"
+                                value={studentId}
+                                onChange={(e) => setStudentId(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="form-group">
+                            <label>パスワード</label>
+                            <input
+                                type="password"
+                                placeholder="••••••••"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
+                            />
+                        </div>
+
+                        <button type="submit">ログイン</button>
+                    </form>
+                </div>
+            </div>
         </div>
     );
+
 }
 
 export default Login;
