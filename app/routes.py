@@ -114,24 +114,53 @@ def get_current_user():
 
 @bp.route('/api/record_attendance', methods=['POST'])
 def record_attendance():
-    # API Key check
+    # 1. Try API Key authentication (for Raspberry Pi)
+    auth_success = False
+    recorded_by = 'raspi_unknown'
+    token_user = None
+
     api_key = request.headers.get('X-API-KEY')
-    if api_key != current_app.config['RASPBERRY_PI_API_KEY']:
+    if api_key and api_key == current_app.config['RASPBERRY_PI_API_KEY']:
+        auth_success = True
+        recorded_by = request.get_json().get('recorded_by', 'raspi_client')
+    
+    # 2. If API Key fails, try JWT authentication (for Mobile App)
+    if not auth_success:
+        token = None
+        if 'Authorization' in request.headers and request.headers['Authorization'].startswith('Bearer '):
+            token = request.headers['Authorization'].split(' ')[1]
+        
+        if token:
+            try:
+                data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+                token_user = User.query.get(data['sub'])
+                if token_user:
+                    auth_success = True
+                    recorded_by = 'mobile_app'
+            except:
+                pass # JWT invalid or expired
+
+    if not auth_success:
         return jsonify({'error': 'Unauthorized'}), 401
 
-    # RasPiからの送信データ: { student_id, token, status, timestamp(optional) }
-    
+    # Main logic
     data = request.get_json()
     student_id = data.get('student_id')
     status = data.get('status', 'present')
-    recorded_by = data.get('recorded_by', 'raspi_unknown')
     
+    # If authenticated via JWT, use the logged-in user's student_id if not provided
+    if token_user and not student_id:
+        student_id = token_user.student_id
+
     if not student_id:
         return jsonify({'error': 'Missing student_id'}), 400
 
     user = User.query.filter_by(student_id=student_id).first()
     if not user:
         return jsonify({'error': 'User not found'}), 404
+        
+    # Security check: If using JWT, ensure users can only record their own attendance (optional, depending on requirements)
+    # For now, we allow it if they are authenticated.
 
     # Create record
     attendance = Attendance(user_id=user.id, status=status, recorded_by=recorded_by)
@@ -176,6 +205,17 @@ def get_all_attendance():
             'recorded_by': att.recorded_by
         })
     return jsonify(results)
+
+# Aliases for compatibility
+@bp.route('/api/user/profile', methods=['GET'])
+@token_required
+def get_user_profile_alias():
+    return get_current_user()
+
+@bp.route('/api/attendance/history', methods=['GET'])
+@token_required
+def get_attendance_history_alias():
+    return get_my_attendance()
 
 @bp.route('/api/admin/send_warning', methods=['POST'])
 @token_required

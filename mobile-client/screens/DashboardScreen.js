@@ -36,12 +36,29 @@ export default function DashboardScreen({ navigation }) {
         }
     };
 
-    const renderItem = ({ item }) => (
-        <View style={styles.item}>
-            <Text style={styles.date}>{new Date(item.timestamp).toLocaleString('ja-JP')}</Text>
-            <Text style={[styles.status, styles[item.status]]}>{getStatusText(item.status)}</Text>
-        </View>
-    );
+    const renderItem = ({ item }) => {
+        // Force JST (Asia/Tokyo) display regardless of device locale
+        // Ensure the timestamp indicates UTC by appending 'Z' if missing (assuming server sends naive UTC)
+        const dateStr = item.timestamp.endsWith('Z') ? item.timestamp : item.timestamp + 'Z';
+        const dateObj = new Date(dateStr);
+
+        const formattedDate = new Intl.DateTimeFormat('ja-JP', {
+            timeZone: 'Asia/Tokyo',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        }).format(dateObj);
+
+        return (
+            <View style={styles.item}>
+                <Text style={styles.date}>{formattedDate}</Text>
+                <Text style={[styles.status, styles[item.status]]}>{getStatusText(item.status)}</Text>
+            </View>
+        );
+    };
 
     if (loading) {
         return (
