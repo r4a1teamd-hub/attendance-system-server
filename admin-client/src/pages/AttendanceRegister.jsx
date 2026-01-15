@@ -75,8 +75,8 @@ function AttendanceRegister() {
                 <table style={{ minWidth: '100%' }}>
                     <thead>
                         <tr>
-                            <th style={{ position: 'sticky', left: 0, background: '#f8f9fa', zIndex: 1 }}>学籍番号</th>
-                            <th style={{ position: 'sticky', left: '100px', background: '#f8f9fa', zIndex: 1 }}>氏名</th>
+                            <th style={{ position: 'sticky', left: 0, background: '#f8f9fa', zIndex: 1, minWidth: '100px' }}>学籍番号</th>
+                            <th style={{ position: 'sticky', left: '100px', background: '#f8f9fa', zIndex: 1, minWidth: '150px', whiteSpace: 'nowrap' }}>氏名</th>
                             <th>出席</th>
                             <th>遅刻</th>
                             <th>欠席</th>
@@ -89,7 +89,7 @@ function AttendanceRegister() {
                         {data?.students.map((student) => (
                             <tr key={student.id}>
                                 <td style={{ position: 'sticky', left: 0, background: 'white', zIndex: 1 }}>{student.student_id}</td>
-                                <td style={{ position: 'sticky', left: '100px', background: 'white', zIndex: 1 }}>{student.username}</td>
+                                <td style={{ position: 'sticky', left: '100px', background: 'white', zIndex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '150px' }}>{student.username}</td>
                                 <td>{student.summary.present}</td>
                                 <td>{student.summary.late}</td>
                                 <td style={{ color: student.summary.absent >= 20 ? 'red' : 'inherit', fontWeight: student.summary.absent >= 20 ? 'bold' : 'normal' }}>

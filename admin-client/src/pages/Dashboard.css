@@ -42,6 +42,11 @@
     align-items: center;
 }
 
+.header-actions {
+    display: flex;
+    gap: 8px;
+}
+
 .sidebar.collapsed .header-content {
     justify-content: center;
 }

@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, current_app, g
 from app import db, mail
-from app.models import User, Attendance
+from app.models import User, Attendance, SystemSetting
 import jwt
 from datetime import datetime, timedelta, timezone
 from functools import wraps
@@ -24,7 +24,11 @@ def token_required(f):
             print(f"DEBUG: Received token: {token}")
             data = jwt.decode(token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
             print(f"DEBUG: Decoded data: {data}")
-            g.current_user = User.query.get(data['sub'])
+            user = User.query.get(data['sub'])
+            if not user:
+                print("DEBUG: User not found (deleted?)")
+                return jsonify({'message': 'User invalid!'}), 401
+            g.current_user = user
         except jwt.ExpiredSignatureError:
             print("DEBUG: Token expired")
             return jsonify({'message': 'Token is invalid or expired!'}), 401
@@ -89,15 +93,51 @@ def login():
     if user is None or not user.check_password(password):
         return jsonify({"error": "Invalid student ID or password"}), 401 # 401 Unauthorized
 
-    # 3. JWT（アクセストークン）を生成
-    token = jwt.encode({
-        'sub': str(user.id), # トークンの主体 (subject) としてユーザーIDを格納 (文字列である必要がある)
-        'iat': datetime.now(timezone.utc), # トークンの発行時刻
-        'exp': datetime.now(timezone.utc) + timedelta(hours=24) # トークンの有効期限 (ここでは24時間)
-    }, current_app.config['SECRET_KEY'], algorithm='HS256')
+    # Record last login time
+    now = datetime.now(timezone.utc)
+    user.last_login_at = now
+    db.session.commit()
 
-    # 4. トークンをクライアントに返す
-    return jsonify({'token': token})
+    # Generate token
+    token = jwt.encode({
+        'sub': f'{user.id}',
+        'iat': datetime.now(timezone.utc),
+        'exp': datetime.now(timezone.utc) + timedelta(hours=24)
+    }, current_app.config['SECRET_KEY'], algorithm='HS256')
+    
+    return jsonify({
+        'token': token,
+        'user': {
+            'id': user.id,
+            'student_id': user.student_id,
+            'role': user.role,
+            'is_password_changed': user.is_password_changed,
+            'last_login_at': now.isoformat()
+        },
+        'server_time': now.isoformat()
+    })
+
+@bp.route('/api/admin/reset_password', methods=['POST'])
+@token_required
+def reset_password():
+    user = g.current_user
+    if user.role != 1:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    data = request.get_json()
+    target_user_id = data.get('user_id')
+    
+    target_user = User.query.get(target_user_id)
+    if not target_user:
+        return jsonify({'error': 'User not found'}), 404
+
+    # Reset password to student_id and set is_password_changed to False
+    target_user.set_password(target_user.student_id)
+    target_user.is_password_changed = False
+    
+    db.session.commit()
+    
+    return jsonify({'message': f'Password reset for student {target_user.student_id}'})
 
 @bp.route('/api/me', methods=['GET'])
 @token_required
@@ -146,7 +186,34 @@ def record_attendance():
     # Main logic
     data = request.get_json()
     student_id = data.get('student_id')
-    status = data.get('status', 'present')
+    
+    # Determine status based on current time (JST)
+    now_utc = datetime.now(timezone.utc)
+    jst_offset = timedelta(hours=9)
+    now_jst = now_utc + jst_offset
+    current_time = now_jst.time()
+    
+    start_time = datetime.strptime("07:00:00", "%H:%M:%S").time()
+    late_limit = datetime.strptime("09:15:00", "%H:%M:%S").time() # Until 09:15:59 is present? Or strict 09:15:00? Usually 09:15 inclusive. Assuming 09:15:59.
+    absent_limit = datetime.strptime("16:45:00", "%H:%M:%S").time()
+    
+    # Strict comparison logic
+    # Present: 07:00:00 <= t <= 09:15:59 (We'll use < 09:16:00 for simplicity if using seconds, but here simple comparison)
+    # Actually, let's strictly follow: 
+    # 07:00 <= t <= 09:15 -> present
+    # 09:16 <= t <= 16:45 -> late
+    # else -> absent
+    
+    pd_start = datetime.strptime("07:00", "%H:%M").time()
+    pd_late_start = datetime.strptime("09:16", "%H:%M").time()
+    pd_end = datetime.strptime("16:45", "%H:%M").time()
+    
+    if pd_start <= current_time < pd_late_start: # 07:00 to 09:15:59... wait, 09:15 is included in present? Yes. So < 09:16
+         status = 'present'
+    elif pd_late_start <= current_time <= pd_end: # 09:16 to 16:45
+         status = 'late'
+    else:
+         status = 'absent'
     
     # If authenticated via JWT, use the logged-in user's student_id if not provided
     if token_user and not student_id:
@@ -255,24 +322,87 @@ def send_warning():
         print(f"ERROR sending email: {e}")
         return jsonify({'error': 'Failed to send email', 'details': str(e)}), 500
 
-@bp.route('/api/admin/users', methods=['GET'])
+@bp.route('/api/admin/users', methods=['GET', 'POST'])
 @token_required
-def get_all_users():
+def manage_users():
     user = g.current_user
     if user.role != 1:
         return jsonify({'error': 'Unauthorized'}), 403
 
-    users = User.query.all()
-    results = []
-    for u in users:
-        results.append({
-            'id': u.id,
-            'student_id': u.student_id,
-            'username': u.username,
-            'email': u.email,
-            'role': u.role
-        })
-    return jsonify(results)
+    if request.method == 'GET':
+        users = User.query.all()
+        results = []
+        for u in users:
+            results.append({
+                'id': u.id,
+                'student_id': u.student_id,
+                'username': u.username,
+                'email': u.email,
+                'role': u.role
+            })
+        return jsonify(results)
+
+    elif request.method == 'POST':
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'Invalid input'}), 400
+
+        student_id = data.get('student_id')
+        username = data.get('username')
+        email = data.get('email')
+
+        if not all([student_id, username, email]):
+            return jsonify({'error': 'Missing required fields'}), 400
+
+        # Check for duplicates
+        if User.query.filter_by(student_id=student_id).first():
+            return jsonify({'error': 'Student ID already registered'}), 400
+        if User.query.filter_by(email=email).first():
+            return jsonify({'error': 'Email already registered'}), 400
+
+        # Create new user
+        # Default password is the student_id
+        new_user = User(student_id=student_id, username=username, email=email)
+        new_user.set_password(student_id) 
+        
+        try:
+            db.session.add(new_user)
+            db.session.commit()
+            return jsonify({'message': 'User created successfully', 'user': {
+                'id': new_user.id,
+                'student_id': new_user.student_id,
+                'username': new_user.username,
+                'email': new_user.email
+            }}), 201
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+
+@bp.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+@token_required
+def delete_user(user_id):
+    user = g.current_user
+    if user.role != 1:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    target_user = User.query.get(user_id)
+    if not target_user:
+        return jsonify({'error': 'User not found'}), 404
+        
+    if target_user.id == user.id:
+         return jsonify({'error': 'Cannot delete yourself'}), 400
+
+    try:
+        # Delete associated attendance records first
+        Attendance.query.filter_by(user_id=user_id).delete()
+        
+        # Delete the user
+        db.session.delete(target_user)
+        db.session.commit()
+        return jsonify({'message': f'User {target_user.student_id} deleted successfully'}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
 
 @bp.route('/api/admin/stats', methods=['GET'])
 @token_required
@@ -280,6 +410,13 @@ def get_stats():
     user = g.current_user
     if user.role != 1:
         return jsonify({'error': 'Unauthorized'}), 403
+
+    # Get warning threshold from settings (default to 20)
+    setting = SystemSetting.query.filter_by(key='warning_threshold').first()
+    try:
+        threshold = int(setting.value) if setting else 20
+    except ValueError:
+        threshold = 20
 
     students = User.query.filter_by(role=0).all()
     stats = []
@@ -289,8 +426,8 @@ def get_stats():
         late = sum(1 for a in attendances if a.status == 'late')
         absent = sum(1 for a in attendances if a.status == 'absent')
         
-        # 欠席回数が20回以上かどうか
-        warning_level = 'high' if absent >= 20 else 'normal'
+        # Determine warning level based on dynamic threshold
+        warning_level = 'high' if absent >= threshold else 'normal'
         
         stats.append({
             'id': student.id,
@@ -300,7 +437,8 @@ def get_stats():
             'present': present,
             'late': late,
             'absent': absent,
-            'warning_level': warning_level
+            'warning_level': warning_level,
+            'threshold': threshold # Optional: return threshold for frontend info
         })
     
     return jsonify(stats)
@@ -403,3 +541,114 @@ def get_monthly_attendance():
         'month': month,
         'students': results
     })
+
+@bp.route('/api/admin/system_settings', methods=['GET', 'POST'])
+@token_required
+def system_settings():
+    user = g.current_user
+    if user.role != 1:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    from app.models import SystemSetting
+
+    if request.method == 'GET':
+        settings = SystemSetting.query.all()
+        result = {}
+        for s in settings:
+            result[s.key] = s.value
+        
+        # Default values if not present
+        if 'warning_threshold' not in result:
+            result['warning_threshold'] = '20'
+            
+        return jsonify(result)
+    
+    elif request.method == 'POST':
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': 'No data provided'}), 400
+            
+        try:
+            for key, value in data.items():
+                setting = SystemSetting.query.filter_by(key=key).first()
+                if setting:
+                    setting.value = str(value)
+                else:
+                    setting = SystemSetting(key=key, value=str(value))
+                    db.session.add(setting)
+            
+            db.session.commit()
+            return jsonify({'message': 'Settings updated successfully'})
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({'error': str(e)}), 500
+
+@bp.route('/api/admin/export_csv', methods=['GET'])
+@token_required
+def export_csv():
+    user = g.current_user
+    if user.role != 1:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    import csv
+    import io
+    from flask import make_response
+
+    # Query all attendance records sorted by timestamp
+    attendances = Attendance.query.order_by(Attendance.timestamp.desc()).all()
+
+    # Create CSV in memory
+    si = io.StringIO()
+    cw = csv.writer(si)
+    
+    # Header
+    cw.writerow(['ID', 'Student ID', 'Name', 'Date', 'Time', 'Status', 'Recorded By'])
+    
+    # Data
+    for att in attendances:
+        cw.writerow([
+            att.id,
+            att.user.student_id,
+            att.user.username,
+            att.timestamp.strftime('%Y-%m-%d'),
+            att.timestamp.strftime('%H:%M:%S'),
+            att.status,
+            att.recorded_by
+        ])
+    
+    output = si.getvalue()
+    
+    # Create response with CSV file
+    response = make_response(output)
+    response.headers["Content-Disposition"] = "attachment; filename=attendance_export.csv"
+    response.headers["Content-type"] = "text/csv"
+    
+    return response
+
+@bp.route('/api/change_password', methods=['POST'])
+@token_required
+def change_password():
+    user = g.current_user
+    
+    # Allow any user to change their own password
+    # data: { current_password, new_password }
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+        
+    current_password = data.get('current_password')
+    new_password = data.get('new_password')
+    
+    if not current_password or not new_password:
+        return jsonify({'error': 'Missing password fields'}), 400
+        
+    # Verify current password
+    if not user.check_password(current_password):
+        return jsonify({'error': 'Current password is incorrect'}), 401
+        
+    # Set new password and mark as changed
+    user.set_password(new_password)
+    user.is_password_changed = True
+    db.session.commit()
+    
+    return jsonify({'message': 'Password updated successfully'})

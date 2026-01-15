@@ -50,7 +50,7 @@ function Reports() {
                 <div className="summary-cards" style={{ marginBottom: '2rem' }}>
                     <div className="card absent" style={{ gridColumn: '1 / -1' }}>
                         <h3 style={{ color: '#c53030', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <AlertTriangle size={20} /> 警告対象学生 (欠席20回以上)
+                            <AlertTriangle size={20} /> 警告対象学生 (欠席{stats.length > 0 && stats[0].threshold ? stats[0].threshold : '20'}回以上)
                         </h3>
                         <p className="count">{warningStudents.length}名</p>
                     </div>
@@ -81,7 +81,7 @@ function Reports() {
                                     <td>{student.email}</td>
                                     <td>{student.present}</td>
                                     <td>{student.late}</td>
-                                    <td style={student.absent >= 20 ? { color: '#c53030', fontWeight: 'bold' } : {}}>
+                                    <td style={student.warning_level === 'high' ? { color: '#c53030', fontWeight: 'bold' } : {}}>
                                         {student.absent}
                                     </td>
                                     <td>

@@ -7,6 +7,30 @@ function Layout() {
     const location = useLocation();
     const navigate = useNavigate();
     const [collapsed, setCollapsed] = useState(false);
+    const [currentTime, setCurrentTime] = useState(new Date());
+
+    React.useEffect(() => {
+        const timer = setInterval(() => {
+            setCurrentTime(new Date());
+        }, 1000);
+        return () => clearInterval(timer);
+    }, []);
+
+    const formatDate = (date) => {
+        return date.toLocaleString('ja-JP', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            weekday: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    };
+
+
+
+
 
     const handleLogout = () => {
         localStorage.removeItem('token');
@@ -18,7 +42,7 @@ function Layout() {
             <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
                 <div className="sidebar-header">
                     <div className="header-content">
-                        {!collapsed && <h2>Attendance Admin</h2>}
+                        {!collapsed && <h2>Admin</h2>}
                         <button
                             className="toggle-btn"
                             onClick={() => setCollapsed(!collapsed)}
@@ -45,10 +69,10 @@ function Layout() {
                         <AlertTriangle size={20} />
                         {!collapsed && <span>レポート</span>}
                     </Link>
-                    <a href="#" title="設定">
+                    <Link to="/settings" className={location.pathname === '/settings' ? 'active' : ''} title="設定">
                         <Settings size={20} />
                         {!collapsed && <span>設定</span>}
-                    </a>
+                    </Link>
                 </nav>
                 <div className="sidebar-footer">
                     <button onClick={handleLogout} className="logout-btn" title="ログアウト">
@@ -65,6 +89,9 @@ function Layout() {
                             location.pathname === '/reports' ? 'レポート' :
                                 location.pathname === '/attendance-register' ? '出席簿' : '管理画面'}</h1>
                     <div className="user-info">
+                        <span style={{ marginRight: '15px', fontWeight: 'bold', color: '#555' }}>
+                            {formatDate(currentTime)}
+                        </span>
                         <span>管理者: <strong>Admin Teacher</strong></span>
                     </div>
                 </header>

@@ -11,11 +11,21 @@ function Login() {
 
     const handleLogin = async (e) => {
         e.preventDefault();
+        setError('');
         try {
             const response = await api.post('/login', { student_id: studentId, password });
-            localStorage.setItem('token', response.data.token);
-            navigate('/dashboard');
+
+            const user = response.data.user;
+
+            // Check if user has admin role (role === 1)
+            if (user && user.role === 1) {
+                localStorage.setItem('token', response.data.token);
+                navigate('/dashboard');
+            } else {
+                setError('管理者アカウントのみログイン可能です');
+            }
         } catch (err) {
+            console.error('Login error:', err);
             setError('認証情報が無効です');
         }
     };

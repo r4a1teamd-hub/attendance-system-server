@@ -11,10 +11,31 @@ export default function LoginScreen({ navigation }) {
         try {
             const response = await api.post('/login', { student_id: studentId, password });
             await SecureStore.setItemAsync('token', response.data.token);
-            navigation.replace('Dashboard');
+            if (response.data.user && response.data.user.is_password_changed === false) {
+                navigation.replace('ChangePassword');
+            } else {
+                navigation.replace('Dashboard');
+            }
         } catch (error) {
             Alert.alert('ログイン失敗', '認証情報が無効です');
         }
+    };
+
+    const handleForgotPassword = () => {
+        Alert.alert(
+            'パスワードを忘れましたか？',
+            '管理者にパスワードのリセットを申請しますか？',
+            [
+                { text: 'キャンセル', style: 'cancel' },
+                {
+                    text: '申請する',
+                    onPress: () => {
+                        // TODO: Implement actual API call here later or just alert for now
+                        Alert.alert('申請完了', '管理者にリセット依頼を送信しました（デモ）。管理者に直接連絡してください。');
+                    }
+                }
+            ]
+        );
     };
 
     return (
@@ -32,9 +53,12 @@ export default function LoginScreen({ navigation }) {
                 placeholder="パスワード"
                 value={password}
                 onChangeText={setPassword}
-                secureTextEntry
+                secureTextEntry={true}
             />
             <Button title="ログイン" onPress={handleLogin} />
+            <View style={{ marginTop: 20 }}>
+                <Button title="パスワードを忘れた場合" onPress={handleForgotPassword} color="#888888" />
+            </View>
         </View>
     );
 }
