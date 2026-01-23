@@ -27,6 +27,7 @@ class Attendance(db.Model):
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     timestamp = db.Column(db.DateTime, index=True, default=datetime.utcnow)
     status = db.Column(db.String(20)) # 'present' (出席), 'late' (遅刻), 'absent' (欠席)
+    period = db.Column(db.Integer) # 1, 2, 3, 4
     recorded_by = db.Column(db.String(64)) # 例: 'raspi_01'
 
     user = db.relationship('User', backref=db.backref('attendances', lazy=True))

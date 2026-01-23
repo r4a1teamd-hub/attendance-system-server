@@ -192,29 +192,45 @@ def record_attendance():
     jst_offset = timedelta(hours=9)
     now_jst = now_utc + jst_offset
     current_time = now_jst.time()
-    
-    start_time = datetime.strptime("07:00:00", "%H:%M:%S").time()
-    late_limit = datetime.strptime("09:15:00", "%H:%M:%S").time() # Until 09:15:59 is present? Or strict 09:15:00? Usually 09:15 inclusive. Assuming 09:15:59.
-    absent_limit = datetime.strptime("16:45:00", "%H:%M:%S").time()
-    
-    # Strict comparison logic
-    # Present: 07:00:00 <= t <= 09:15:59 (We'll use < 09:16:00 for simplicity if using seconds, but here simple comparison)
-    # Actually, let's strictly follow: 
-    # 07:00 <= t <= 09:15 -> present
-    # 09:16 <= t <= 16:45 -> late
-    # else -> absent
-    
-    pd_start = datetime.strptime("07:00", "%H:%M").time()
-    pd_late_start = datetime.strptime("09:16", "%H:%M").time()
-    pd_end = datetime.strptime("16:45", "%H:%M").time()
-    
-    if pd_start <= current_time < pd_late_start: # 07:00 to 09:15:59... wait, 09:15 is included in present? Yes. So < 09:16
-         status = 'present'
-    elif pd_late_start <= current_time <= pd_end: # 09:16 to 16:45
-         status = 'late'
-    else:
-         status = 'absent'
-    
+    current_date_str = now_jst.strftime('%Y/%m/%d')
+    current_time_str = now_jst.strftime('%H:%M')
+
+    # Time Slot Definitions
+    # Format: (period, start_time_str, late_limit_str, attend_start_str)
+    # attend_start: 20 mins before start_time
+    time_slots = [
+        (1, "09:15", "09:45", "08:55"),
+        (2, "11:00", "11:30", "10:40"),
+        (3, "13:30", "14:00", "13:10"),
+        (4, "15:15", "15:45", "14:55")
+    ]
+
+    detected_period = None
+    detected_status = None
+
+    for period, start_str, late_limit_str, attend_start_str in time_slots:
+        start_t = datetime.strptime(start_str, "%H:%M").time()
+        late_limit_t = datetime.strptime(late_limit_str, "%H:%M").time()
+        attend_start_t = datetime.strptime(attend_start_str, "%H:%M").time()
+
+        # Check Present range: Attend Start <= t <= Start Time
+        # Note: Spec says "Until start time exactly (09:15:00) is present"
+        # So: attend_start <= t <= start_t
+        if attend_start_t <= current_time <= start_t:
+            detected_period = period
+            detected_status = 'present'
+            break
+        
+        # Check Late range: Start Time < t <= Late Limit
+        # 09:15:01 ...
+        if start_t < current_time <= late_limit_t:
+            detected_period = period
+            detected_status = 'late'
+            break
+
+    if not detected_period:
+        return jsonify({'message': '現在、出席受付時間外です'}), 400
+
     # If authenticated via JWT, use the logged-in user's student_id if not provided
     if token_user and not student_id:
         student_id = token_user.student_id
@@ -225,16 +241,43 @@ def record_attendance():
     user = User.query.filter_by(student_id=student_id).first()
     if not user:
         return jsonify({'error': 'User not found'}), 404
-        
-    # Security check: If using JWT, ensure users can only record their own attendance (optional, depending on requirements)
-    # For now, we allow it if they are authenticated.
+
+    # Check for duplicate attendance for this PERIOD today (JST)
+    start_of_day_jst = now_jst.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_of_day_utc = start_of_day_jst - jst_offset
+    
+    existing_attendance = Attendance.query.filter_by(user_id=user.id, period=detected_period).filter(Attendance.timestamp >= start_of_day_utc).first()
+    
+    if existing_attendance:
+        return jsonify({
+            'message': '既に登録済みです',
+            'data': {
+                'date': current_date_str,
+                'time': current_time_str,
+                'period': existing_attendance.period,
+                'status': existing_attendance.status
+            }
+        }), 200
 
     # Create record
-    attendance = Attendance(user_id=user.id, status=status, recorded_by=recorded_by)
+    attendance = Attendance(
+        user_id=user.id, 
+        status=detected_status, 
+        period=detected_period,
+        recorded_by=recorded_by
+    )
     db.session.add(attendance)
     db.session.commit()
 
-    return jsonify({'message': 'Attendance recorded', 'id': attendance.id}), 201
+    return jsonify({
+        'message': 'Attendance recorded',
+        'data': {
+            'date': current_date_str,
+            'time': current_time_str,
+            'period': detected_period,
+            'status': detected_status
+        }
+    }), 201
 
 @bp.route('/api/attendance/me', methods=['GET'])
 @token_required
