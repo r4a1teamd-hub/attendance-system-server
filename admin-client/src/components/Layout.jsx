@@ -89,7 +89,15 @@ function Layout() {
                             location.pathname === '/reports' ? 'レポート' :
                                 location.pathname === '/attendance-register' ? '出席簿' : '管理画面'}</h1>
                     <div className="user-info">
-                        <span style={{ marginRight: '15px', fontWeight: 'bold', color: '#555' }}>
+                        <span style={{
+                            marginRight: '15px',
+                            fontWeight: 'bold',
+                            color: '#555',
+                            fontVariantNumeric: 'tabular-nums',
+                            display: 'inline-block',
+                            width: '250px',
+                            textAlign: 'center'
+                        }}>
                             {formatDate(currentTime)}
                         </span>
                         <span>管理者: <strong>Admin Teacher</strong></span>

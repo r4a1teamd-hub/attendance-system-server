@@ -81,7 +81,7 @@ function AttendanceRegister() {
                             <th>遅刻</th>
                             <th>欠席</th>
                             {daysArray.map(day => (
-                                <th key={day} style={{ minWidth: '30px', textAlign: 'center' }}>{day}</th>
+                                <th key={day} style={{ minWidth: '50px', textAlign: 'center' }}>{day}</th>
                             ))}
                         </tr>
                     </thead>
@@ -96,14 +96,63 @@ function AttendanceRegister() {
                                     {student.summary.absent}
                                 </td>
                                 {daysArray.map(day => {
-                                    const status = student.daily_status[day];
+                                    // Parse daily status if it's not a simple string anymore, or we might need to fetch detailed data.
+                                    // Wait, the current API `get_monthly_attendance` returns `daily_status[day] = status_string`.
+                                    // We need it to return valid data (e.g. Map<Period, Status> or Array of records).
+                                    // Currently `daily_status` in backend just overwrites: `daily_status[day] = att.status`.
+                                    // We need to update Backend `get_monthly_attendance` first to return DETAILED daily status!
+                                    // Ah, I missed that step in the plan. The current backend logic overwrites the status.
+                                    // I should update the Frontend assuming the Backend will return a map or list, 
+                                    // AND I need to update the Backend `get_monthly_attendance` to return details.
+
+                                    // Let's assume Backend returns an object for each day: { 1: 'present', 3: 'absent' } etc.
+                                    // Or simplified: Just the "Best Status" string?
+                                    // No, to implement "1:出" or "2:出", we need to know the Period.
+
+                                    // I must update the Backend first or simultaneously.
+                                    // For now, I'll update this to handle the EXPECTED data structure:
+                                    // daily_status[day] = { period: status, ... } OR Array.
+
+                                    // Let's update Backend to return: daily_status[day] = [ { period: 1, status: 'present' }, ... ]
+
+                                    const dayRecords = student.daily_status[day]; // Expecting Array or Object
+                                    let displayText = '-';
+                                    let displayColor = 'transparent';
+
+                                    if (Array.isArray(dayRecords) && dayRecords.length > 0) {
+                                        // Priority: Present/Late > Absent
+                                        // Sort by priority? Or find first.
+                                        const presentOrLate = dayRecords.find(r => r.status === 'present' || r.status === 'late');
+                                        const absent = dayRecords.find(r => r.status === 'absent');
+
+                                        const targetRecord = presentOrLate || absent || dayRecords[0];
+
+                                        if (targetRecord) {
+                                            const statusMap = { 'present': '出', 'late': '遅', 'absent': '欠' };
+                                            displayText = `${targetRecord.period}:${statusMap[targetRecord.status] || '-'}`;
+
+                                            // Color
+                                            if (targetRecord.status === 'present') displayColor = '#c6f6d5';
+                                            else if (targetRecord.status === 'late') displayColor = '#fefcbf';
+                                            else if (targetRecord.status === 'absent') displayColor = '#fed7d7';
+                                        }
+                                    } else if (typeof dayRecords === 'string') {
+                                        // Fallback for old API response (just status string)
+                                        const statusMap = { 'present': '出', 'late': '遅', 'absent': '欠' };
+                                        displayText = statusMap[dayRecords] || '-';
+                                        if (dayRecords === 'present') displayColor = '#c6f6d5';
+                                        else if (dayRecords === 'late') displayColor = '#fefcbf';
+                                        else if (dayRecords === 'absent') displayColor = '#fed7d7';
+                                    }
+
                                     return (
                                         <td key={day} style={{
-                                            backgroundColor: getStatusColor(status),
+                                            backgroundColor: displayColor,
                                             textAlign: 'center',
-                                            padding: '4px'
+                                            padding: '4px',
+                                            fontSize: '0.85rem'
                                         }}>
-                                            {getStatusText(status)}
+                                            {displayText}
                                         </td>
                                     );
                                 })}

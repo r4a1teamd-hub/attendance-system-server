@@ -34,7 +34,7 @@ function Login() {
         <div className="login-page">
             <div className="login-intro">
                 <div className="intro-content">
-                    <h1>出席管理システム</h1>
+                    <h1>Attenix</h1>
                     <p className="subtitle">Attendance Management System</p>
                     <div className="features">
                         <div className="feature-item">
@@ -52,7 +52,7 @@ function Login() {
                     </div>
                 </div>
                 <div className="intro-footer">
-                    <p>&copy; 2026 R4A1 Team D. All rights reserved.</p>
+                    <p>&copy; 2026 Domain Φ. All rights reserved.</p>
                 </div>
             </div>
 

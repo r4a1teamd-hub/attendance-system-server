@@ -229,6 +229,41 @@ def record_attendance():
             break
 
     if not detected_period:
+        # Secondary Check: "Gap Time" -> Absent for previous period
+        # Example: 09:50 is after Period 1 Late Limit (09:45) and before Period 2 Start (10:40)
+        # We record this as "Period 1: Absent"
+        for period, start_str, late_limit_str, attend_start_str in time_slots:
+            late_limit_t = datetime.strptime(late_limit_str, "%H:%M").time()
+            
+            # Find next period's start time to define the "gap" end
+            # If it's the last period, the gap might be undefined or up to end of day?
+            # For simplicity, we just check if it's AFTER the late limit of Period N.
+            # And to avoid overriding specific period logic, we must ensure it doesn't overlap with next period's attedance start.
+            
+            # Logic: If current_time > late_limit_t AND current_time < next_period_attend_start
+            
+            next_period_start = None
+            if period < len(time_slots): # Periods are 1-based, index 0 to 3
+                # Get Attend Start of next period
+                next_p_idx = period # period is 1-based, so this gets index of next
+                _, _, _, next_attend_start_str = time_slots[next_p_idx]
+                next_period_start = datetime.strptime(next_attend_start_str, "%H:%M").time()
+            
+            # Condition: After Late Limit
+            if current_time > late_limit_t:
+                # And Before Next Period (if exists)
+                if next_period_start and current_time < next_period_start:
+                    detected_period = period
+                    detected_status = 'absent'
+                    break
+                elif not next_period_start:
+                    # After last period's late limit -> Absent for last period
+                     # (Optional: limit this to some reasonable time, e.g. 18:00?)
+                    detected_period = period
+                    detected_status = 'absent'
+                    break
+
+    if not detected_period:
         return jsonify({'message': '現在、出席受付時間外です'}), 400
 
     # If authenticated via JWT, use the logged-in user's student_id if not provided
@@ -509,15 +544,20 @@ def get_daily_stats():
     # 登録されている全学生数を取得（分母用）
     total_students = User.query.filter_by(role=0).count()
     
-    # まだ記録がない学生は「未記録」扱いだが、ここでは単純なカウントを返す
-    # 必要であれば「未記録」の数も計算可能: total_students - (present + late + absent)
+    # Calculate unique users who have ANY record today (meaning they arrived at school)
+    # This includes 'present', 'late', and even 'absent' (if we recorded 'absent' for P1 but they are here)
+    # Wait, if they only have 'absent' record (e.g. came late for P1), are they "Arrived"?
+    # Yes, because the system detected them. "Truly Absent" means no detection at all.
+    arrived_user_ids = set(a.user_id for a in attendances)
+    arrived_count = len(arrived_user_ids)
 
     return jsonify({
         'date': today.isoformat(),
         'total_students': total_students,
         'present': present,
         'late': late,
-        'absent': absent
+        'absent': absent,
+        'arrived_count': arrived_count
     })
 
 @bp.route('/api/admin/monthly_attendance', methods=['GET'])
@@ -547,7 +587,7 @@ def get_monthly_attendance():
             Attendance.timestamp <= end_date
         ).all()
 
-        # 日付ごとのステータスマップを作成 (例: {1: 'present', 5: 'late'})
+        # 日付ごとのステータスマップを作成 (例: {1: [{'period': 1, 'status': 'present'}, ...]})
         daily_status = {}
         present_count = 0
         late_count = 0
@@ -555,10 +595,15 @@ def get_monthly_attendance():
 
         for att in attendances:
             day = att.timestamp.day
-            # 同日に複数記録がある場合は最新を採用するロジックなどが考えられるが、
-            # ここではシンプルに上書き（または最初の1件）とする。
-            # 実際には timestamp順で取得してループすれば最新が残る等の制御が可能
-            daily_status[day] = att.status
+            
+            if day not in daily_status:
+                daily_status[day] = []
+            
+            # Store period and status for detailed display
+            daily_status[day].append({
+                'period': att.period,
+                'status': att.status
+            })
             
             if att.status == 'present':
                 present_count += 1

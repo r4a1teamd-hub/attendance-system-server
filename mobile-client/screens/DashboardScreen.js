@@ -28,11 +28,12 @@ export default function DashboardScreen({ navigation }) {
     };
 
     const getStatusText = (status) => {
-        switch (status) {
+        const s = status ? status.toLowerCase() : '';
+        switch (s) {
             case 'present': return '出席';
             case 'absent': return '欠席';
             case 'late': return '遅刻';
-            default: return status.toUpperCase();
+            default: return status;
         }
     };
 

@@ -39,6 +39,12 @@ function Dashboard() {
     const total = stats.total_students || 1; // Avoid division by zero
     const presentRate = Math.round((stats.present / total) * 100);
 
+    // Calculate absent count
+    // Use 'arrived_count' from API if available to calculate accurate "Not at School" count.
+    // Fallback to previous logic if API hasn't updated yet.
+    const arrived = stats.arrived_count !== undefined ? stats.arrived_count : (stats.present + stats.late);
+    const calculatedAbsent = Math.max(0, stats.total_students - arrived);
+
     return (
         <>
             <div className="summary-cards">
@@ -59,7 +65,7 @@ function Dashboard() {
                 </div>
                 <div className="card absent">
                     <h3><UserX size={20} /> 本日の欠席</h3>
-                    <p className="count">{stats.absent}名</p>
+                    <p className="count">{calculatedAbsent}名</p>
                     <p className="label">欠席者数</p>
                 </div>
             </div>
