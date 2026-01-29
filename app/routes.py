@@ -152,6 +152,34 @@ def get_current_user():
         'role': user.role
     })
 
+    # Time Slot Definitions
+    # Format: (period, start_time_str, late_limit_str, attend_start_str)
+    # attend_start: 20 mins before start_time
+    # ... (existing content) ...
+
+@bp.route('/api/qr_token', methods=['GET'])
+@token_required
+def get_qr_token():
+    user = g.current_user
+    
+    # Generate a short-lived token (e.g., 5 minutes)
+    # This token contains the user ID and is signed by the server
+    expiration = datetime.now(timezone.utc) + timedelta(minutes=5)
+    
+    token_payload = {
+        'sub': str(user.id),
+        'type': 'qr_attendance',
+        'exp': expiration,
+        'iat': datetime.now(timezone.utc)
+    }
+    
+    token = jwt.encode(token_payload, current_app.config['SECRET_KEY'], algorithm='HS256')
+    
+    return jsonify({
+        'token': token,
+        'expires_in': 300 # seconds
+    })
+
 @bp.route('/api/record_attendance', methods=['POST'])
 def record_attendance():
     # 1. Try API Key authentication (for Raspberry Pi)
@@ -185,7 +213,38 @@ def record_attendance():
 
     # Main logic
     data = request.get_json()
+    print(f"DEBUG: record_attendance received data: {data}") # Add this debug line
     student_id = data.get('student_id')
+    qr_token = data.get('qr_token')
+
+    # Logic to handle QR Token
+    if qr_token:
+        try:
+            # Decode the QR token
+            qr_data = jwt.decode(qr_token, current_app.config['SECRET_KEY'], algorithms=['HS256'])
+            
+            # Verify token type
+            if qr_data.get('type') != 'qr_attendance':
+                 return jsonify({'error': 'Invalid token type'}), 400
+            
+            # Extract user ID from token
+            user_id = qr_data['sub']
+            user = User.query.get(user_id)
+            
+            if not user:
+                 return jsonify({'error': 'User not found from token'}), 404
+                 
+            student_id = user.student_id
+            
+        except jwt.ExpiredSignatureError:
+            return jsonify({'error': 'QR Token expired'}), 400
+        except jwt.InvalidTokenError:
+            return jsonify({'error': 'Invalid QR Token'}), 400
+        except Exception as e:
+            return jsonify({'error': f'Error processing QR token: {str(e)}'}), 500
+
+    if not student_id:
+         return jsonify({'error': 'Missing student_id or valid qr_token'}), 400
     
     # Determine status based on current time (JST)
     now_utc = datetime.now(timezone.utc)
@@ -382,7 +441,8 @@ def send_warning():
     # メール送信処理
     try:
         msg = Message("【重要】出席状況に関する警告",
-                      recipients=[target_user.email])
+                      recipients=[target_user.email],
+                      charset='utf-8')
         msg.body = f"""
 {target_user.username} (学籍番号: {target_user.student_id}) 様
 
@@ -394,7 +454,10 @@ def send_warning():
 ※このメールは自動送信されています。
 """
         mail.send(msg)
-        print(f"WARNING EMAIL SENT TO: {target_user.email} for Student {target_user.student_id}")
+        try:
+            print(f"WARNING EMAIL SENT TO: {target_user.email} for Student {target_user.student_id}")
+        except UnicodeEncodeError:
+            print(f"WARNING EMAIL SENT TO: {target_user.email} (Name printing failed due to encoding)")
         return jsonify({'message': f'Warning sent to {target_user.email}'})
     except Exception as e:
         print(f"ERROR sending email: {e}")
