@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api';
 import { useNavigate } from 'react-router-dom';
-import { RotateCcw, Trash2 } from 'lucide-react';
+import { RotateCcw, Trash2, CreditCard } from 'lucide-react';
 import './Dashboard.css'; // Reuse dashboard styles
 
 function Students() {
@@ -43,6 +43,22 @@ function Students() {
         }
     };
 
+    const handleRegisterRFID = async (userId, studentId) => {
+        const uid = window.prompt(`${studentId} のICカード登録\n\nリーダーを接続し、入力欄にフォーカスを当ててカードをタッチしてください（または手動入力）。`);
+
+        if (!uid) return; // Cancelled
+
+        try {
+            await api.post(`/admin/users/${userId}/rfid`, { rfid_uid: uid.trim() });
+            alert('ICカードを登録しました。');
+            fetchStudents(); // Refresh list to update status
+        } catch (error) {
+            console.error('Register RFID failed:', error);
+            const msg = error.response?.data?.error || '登録に失敗しました。';
+            alert(`エラー: ${msg}`);
+        }
+    };
+
     const handleDeleteUser = async (userId, studentId) => {
         if (!window.confirm(`${studentId} を本当に削除しますか？\n\n※このユーザーの出席データも全て削除されます。\n※この操作は取り消せません。`)) {
             return;
@@ -79,6 +95,7 @@ function Students() {
                             <th>ID</th>
                             <th>学籍番号</th>
                             <th>氏名</th>
+                            <th>ICカード</th>
                             <th>メールアドレス</th>
                             <th>操作</th>
                         </tr>
@@ -89,8 +106,26 @@ function Students() {
                                 <td>#{student.id}</td>
                                 <td>{student.student_id}</td>
                                 <td>{student.username}</td>
+                                <td>
+                                    {student.rfid_uid ? (
+                                        <span style={{ color: '#27ae60', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                            <CreditCard size={16} /> 登録済
+                                        </span>
+                                    ) : (
+                                        <span style={{ color: '#95a5a6', fontSize: '0.9em' }}>未登録</span>
+                                    )}
+                                </td>
                                 <td>{student.email}</td>
                                 <td>
+                                    <button
+                                        onClick={() => handleRegisterRFID(student.id, student.student_id)}
+                                        className="edit-btn"
+                                        title="ICカード登録・更新"
+                                        style={{ backgroundColor: '#3498db', color: 'white', border: 'none', padding: '5px 10px', borderRadius: '4px', cursor: 'pointer', marginRight: '8px' }}
+                                    >
+                                        <CreditCard size={16} style={{ marginRight: '4px' }} />
+                                        {student.rfid_uid ? '変更' : '登録'}
+                                    </button>
                                     <button
                                         onClick={() => handleResetPassword(student.id, student.student_id)}
                                         className="warning-btn"

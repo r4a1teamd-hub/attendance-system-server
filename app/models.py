@@ -12,6 +12,7 @@ class User(db.Model):
     role = db.Column(db.Integer, default=0) # 0: Student, 1: Teacher
     is_password_changed = db.Column(db.Boolean, default=False)
     last_login_at = db.Column(db.DateTime, nullable=True)
+    rfid_uid = db.Column(db.String(64), index=True, unique=True, nullable=True) # RFID Tag UID
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)

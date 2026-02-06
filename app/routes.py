@@ -216,6 +216,15 @@ def record_attendance():
     print(f"DEBUG: record_attendance received data: {data}") # Add this debug line
     student_id = data.get('student_id')
     qr_token = data.get('qr_token')
+    rfid_uid = data.get('rfid_uid')
+
+    # Logic to handle RFID UID
+    if rfid_uid:
+        user = User.query.filter_by(rfid_uid=rfid_uid).first()
+        if user:
+            student_id = user.student_id
+        else:
+            return jsonify({'error': 'Registered card not found'}), 404
 
     # Logic to handle QR Token
     if qr_token:
@@ -244,7 +253,7 @@ def record_attendance():
             return jsonify({'error': f'Error processing QR token: {str(e)}'}), 500
 
     if not student_id:
-         return jsonify({'error': 'Missing student_id or valid qr_token'}), 400
+         return jsonify({'error': 'Missing student_id, rfid_uid or valid qr_token'}), 400
     
     # Determine status based on current time (JST)
     now_utc = datetime.now(timezone.utc)
@@ -479,7 +488,8 @@ def manage_users():
                 'student_id': u.student_id,
                 'username': u.username,
                 'email': u.email,
-                'role': u.role
+                'role': u.role,
+                'rfid_uid': u.rfid_uid
             })
         return jsonify(results)
 
@@ -803,3 +813,33 @@ def change_password():
     db.session.commit()
     
     return jsonify({'message': 'Password updated successfully'})
+
+@bp.route('/api/admin/users/<int:user_id>/rfid', methods=['POST'])
+@token_required
+def register_user_rfid(user_id):
+    user = g.current_user
+    if user.role != 1:
+        return jsonify({'error': 'Unauthorized'}), 403
+
+    target_user = User.query.get(user_id)
+    if not target_user:
+        return jsonify({'error': 'User not found'}), 404
+
+    data = request.get_json()
+    rfid_uid = data.get('rfid_uid')
+
+    if not rfid_uid:
+        return jsonify({'error': 'Missing rfid_uid'}), 400
+
+    # Check if this RFID is already registered to SOMEONE ELSE
+    existing_user = User.query.filter_by(rfid_uid=rfid_uid).first()
+    if existing_user and existing_user.id != target_user.id:
+        return jsonify({'error': f'This card is already registered to user {existing_user.student_id}'}), 400
+
+    target_user.rfid_uid = rfid_uid
+    try:
+        db.session.commit()
+        return jsonify({'message': f'RFID registered for {target_user.student_id}'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
